@@ -181,12 +181,12 @@ resource "aws_lambda_permission" "allow_ingestion_bucket_to_invoke_transform_lam
   source_arn    = aws_s3_bucket.ingestion_zone.arn # restricts permissions to my specific ingestion bucket
 }
 
-resource "aws_lambda_function" "schema_load_lambda" {
-  function_name = var.schema_load_lambda_name
+resource "aws_lambda_function" "load_lambda" {
+  function_name = var.load_lambda_name
   s3_bucket     = aws_s3_bucket.code.bucket
   s3_key        = aws_s3_object.schema_load_function_zip.key
 
-  role          = aws_iam_role.schema_load_lambda_role.arn
+  role          = aws_iam_role.load_lambda_role.arn
   handler       = "schema_load.lambda_handler"
   runtime       = "python3.13"
   architectures = ["x86_64"]
@@ -215,6 +215,7 @@ resource "aws_lambda_function" "schema_load_lambda" {
 
   environment {
     variables = {
+      PROCESSED_BUCKET      = aws_s3_bucket.processed_zone.id
       WAREHOUSE_SECRET_NAME = aws_db_instance.warehouse.master_user_secret[0].secret_arn
       WAREHOUSE_NAME        = aws_db_instance.warehouse.db_name
       HOST                  = aws_db_instance.warehouse.address
@@ -240,4 +241,27 @@ data "archive_file" "load_schema_function" {
   type        = "zip"
   source_file = "${path.module}/../schema/schema_load.py"
   output_path = "${path.module}/schema_load_function_zip"
+}
+
+# trigger load lambda when new files are added to the processed bucket
+resource "aws_s3_bucket_notification" "processed_bucket_notification" {
+  bucket = aws_s3_bucket.processed_zone.id
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.load_lambda.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_suffix       = ".parquet"
+  }
+
+  depends_on = [
+    aws_lambda_permission.allow_ingestion_bucket_to_invoke_load_lambda
+  ]
+}
+
+# allow ingestion bucket to invoke transform lambda
+resource "aws_lambda_permission" "allow_ingestion_bucket_to_invoke_load_lambda" {
+  statement_id  = "AllowExecutionFromIngestionS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.load_lambda.arn # change it to the actual function name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.processed_zone.arn # restricts permissions to my specific ingestion bucket
 }
