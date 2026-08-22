@@ -3,6 +3,9 @@ import json
 import os
 from botocore.exceptions import ClientError
 import psycopg2
+import pandas as pd
+from io import BytesIO, StringIO
+from psycopg2 import sql
 
 sql_schema = """
 Drop TABLE IF EXISTS fact_sales CASCADE;
@@ -121,14 +124,13 @@ def get_secret(secret_name):
 
     except ClientError as e:
         raise e
-    
-def load_schema():
-    secrets = get_secret(os.environ["WAREHOUSE_SECRET_NAME"])
 
+
+def load_schema(secret):
 
     with psycopg2.connect(
         user=os.environ["USER"], 
-        password = secrets["password"], 
+        password = secret["password"], 
         dbname=os.environ["WAREHOUSE_NAME"], 
         host=os.environ["HOST"], 
         port=os.environ["PORT"],
@@ -137,5 +139,100 @@ def load_schema():
         with conn.cursor() as cur:
             cur.execute(sql_schema)
 
+
+def get_dataframe_from_s3(bucket: str, object_key: str) -> pd.DataFrame:
+    """
+    Reads parquet data from S3 using boto3 and returns most recent file.
+
+    object_key should be the table/prefix name, e.g. "staff".
+    This function reads parquet files under processed/{object_key}/.
+    """
+
+    s3_client = boto3.client("s3")
+
+    prefix = f"processed/{object_key}/"
+
+    try:
+        list_response = s3_client.list_objects_v2(
+            Bucket=bucket,
+            Prefix=prefix,
+        )
+
+        objects = list_response.get("Contents", [])
+
+        parquet_objects = [obj for obj in objects if obj["Key"].endswith(".parquet")]
+
+        if not parquet_objects:
+            raise FileNotFoundError(
+                f"No parquet files found under s3://{bucket}/{prefix}"
+        )
+
+        most_recent = max(parquet_objects, key=lambda obj: obj["LastModified"])
+
+      
+        response = s3_client.get_object(
+                Bucket=bucket,
+                Key=most_recent['Key'],
+            )
+
+        parquet_bytes = response["Body"].read()
+        df = pd.read_parquet(BytesIO(parquet_bytes))
+
+        return df
+
+    except Exception as error:
+        raise RuntimeError(
+            f"Failed to read parquet data from s3://{bucket}/{prefix}"
+        ) from error
+
+    
+def seed_table_in_db(secret, table, df):
+    
+    with psycopg2.connect(
+            user=os.environ["USER"], 
+            password = secret["password"], 
+            dbname=os.environ["WAREHOUSE_NAME"], 
+            host=os.environ["HOST"], 
+            port=os.environ["PORT"],
+        ) as conn:
+
+        with conn.cursor() as cur:
+
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False, header=False, na_rep="\\N")
+            csv_buffer.seek(0)
+
+            copy_sql = sql.SQL("""
+            COPY {} ({})
+            FROM STDIN
+            WITH (FORMAT CSV)
+            """).format(sql.Identifier(table),sql.SQL(", ").join(sql.Identifier(column) for column in df.columns))
+
+            cur.copy_expert(
+                copy_sql,
+                csv_buffer
+            )
+
+        conn.commit()
+
+
+
 def lambda_handler(event, context):
-    load_schema()
+    
+    secret = get_secret(os.environ["WAREHOUSE_SECRET_NAME"])
+
+    load_schema(secret)
+
+    tables = [
+            "dim_counterparty",
+            "dim_currency",
+            "dim_date",
+            "dim_design",
+            "dim_location",
+            "dim_staff",
+            "fact_sales"
+        ]
+    
+    for table in tables:
+      df = get_dataframe_from_s3(os.environ["PROCESSED_BUCKET"], table)
+      seed_table_in_db(secret, table, df)
