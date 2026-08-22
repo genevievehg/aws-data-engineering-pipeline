@@ -209,6 +209,12 @@ resource "aws_iam_role_policy_attachment" "function_logging_policy_attach" {
   policy_arn = aws_iam_policy.lambda_function_logging_policy.arn
 }
 
+# lambda logging permissions
+resource "aws_iam_role_policy_attachment" "transform_lambda_basic_execution" {
+  role       = aws_iam_role.transform_lambda_role.name
+  policy_arn = aws_iam_policy.lambda_function_logging_policy.arn
+}
+
 # Give the extract Lambda permission to retrieve database credentials.
 resource "aws_iam_role_policy_attachment" "extract_secrets_attach" {
   role       = aws_iam_role.extract_lambda_role.name

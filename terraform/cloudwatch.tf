@@ -31,3 +31,9 @@ resource "aws_cloudwatch_metric_alarm" "ingest_function_error_alarm" {
   insufficient_data_actions = []
   alarm_actions             = [aws_sns_topic.error_notification.arn]
 }
+
+# cloudwatch log group for transform lambda
+resource "aws_cloudwatch_log_group" "transform_function_log_group" {
+  name              = "/aws/lambda/transform_function" # change if the function name differs, finds the logging info in warehouse function
+  retention_in_days = 30                               # logs delete after 14 days
+}
