@@ -25,7 +25,7 @@ resource "aws_db_instance" "warehouse" {
   max_allocated_storage = 0
 
   # Networking
-  db_subnet_group_name = "default"
+  db_subnet_group_name = aws_db_subnet_group.rds.name
 
   vpc_security_group_ids = [
     aws_security_group.warehouse_rds.id
@@ -72,5 +72,15 @@ resource "aws_db_instance" "warehouse" {
     Name      = "jurassic-sparks-warehouse"
     Project   = "jurassic-sparks"
     Component = "warehouse"
+  }
+}
+
+resource "aws_db_subnet_group" "rds" {
+  name = "rds-subnet-group"
+
+  subnet_ids = data.aws_subnets.default.ids
+
+  tags = {
+    Name = "my-rds-subnet-group"
   }
 }
