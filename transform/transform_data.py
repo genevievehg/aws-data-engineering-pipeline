@@ -167,6 +167,9 @@ def transform_location(df):
     # remove rows with missing data, except for address_line_2 and district columns
     cleaned_df = cleaned_df.replace(["NaN", "nan", "None", ""], np.nan).dropna(subset=["location_id", "address_line_1", "city", "postal_code", "country", "phone"])
 
+    column_order = ["location_id", "address_line_1", "address_line_2", "district", "city", "postal_code", "country", "phone"]
+
+    cleaned_df = cleaned_df[column_order]
     return cleaned_df
 
 
@@ -313,7 +316,7 @@ def create_dim_date(start_date, end_date):
 def transform_design(df):
    
     # drop unwanted columns
-    df = df.drop(
+    cleaned_df = df.drop(
     columns=['created_at','last_updated']
     )
     # drop duplicate
@@ -321,7 +324,11 @@ def transform_design(df):
     subset='design_id',
     keep='last'
     )
-    return df
+
+    column_order = ["design_id", "design_name", "file_location", "file_name"]
+    cleaned_df = cleaned_df[column_order]
+
+    return cleaned_df
 
 def save_dataframe_to_s3_parquet(dataframe, bucket_name, table_name, extracted_ts):
     parquet_buffer = BytesIO()
@@ -368,7 +375,7 @@ def lambda_handler(event, context):
             extracted_ts=extracted_ts
         )
 
-    dim_date = create_dim_date("2022-01-01", date.today().strftime('%Y-%m-%d'))
+    dim_date = create_dim_date("2022-01-01", "2029-12-31")
     save_dataframe_to_s3_parquet(
                 dataframe=dim_date, 
                 bucket_name=os.environ["PROCESSED_BUCKET"],
