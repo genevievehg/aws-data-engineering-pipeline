@@ -19,9 +19,9 @@ variable "warehouse_master_username" {
   default     = "postgres"
 }
 
-variable "schema_load_lambda_name" {
+variable "load_lambda_name" {
   type    = string
-  default = "schema_load_lambda"
+  default = "load_lambda"
 }
 
 variable "temporary_warehouse_admin_cidrs" {
