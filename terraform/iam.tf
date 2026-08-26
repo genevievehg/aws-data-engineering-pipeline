@@ -31,13 +31,6 @@ resource "aws_iam_role" "load_lambda_role" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
-## Runtime role for the Lambda that loads the schema
-# into the PostgresSQL warehouse
-resource "aws_iam_role" "load_lambda_role" {
-  name_prefix        = "schema-load-lambda-"
-  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
-}
-
 # Looks up the existing Totesys credentials secret.
 data "aws_secretsmanager_secret" "totesys_credentials" {
   name = "totesys_database_credentials"
