@@ -2,7 +2,6 @@ from unittest.mock import MagicMock, patch
 import boto3
 from moto import mock_aws
 from io import BytesIO
-import pycountry
 import pytest
 import pandas as pd
 from unittest import mock
@@ -10,6 +9,7 @@ from transform.transform_data import (
     get_dataframe_from_s3,
     get_currency_name,
     transform_currency,
+    create_merged_staff_dataframe,
     transform_staff,
     transform_location,
     transform_sales,
@@ -119,6 +119,60 @@ def test_transform_currency_standardises_currency_codes():
     assert result_df["currency_code"][0] == "GBP"
     assert result_df["currency_code"][1] == "USD"
 
+
+def test_create_merged_staff_dataframe_returns_df(monkeypatch):
+    monkeypatch.setenv("INGEST_BUCKET", "mock-s3")
+
+    staff_df = pd.DataFrame(
+            {"staff_id": [1,2],
+            "first_name": ["John", "Jane"],
+            "last_name": ["Adams", "Jones"],
+            "department_id": [1, 2],
+            "email_address": ["john@web.com", "jane@web.com"],
+            "created_at": ["2026-01-01", "2026-01-02"],
+            "last_updated": ["2026-01-03", "2026-01-04"],
+            "extracted_ts": ["2026-08-21T20:30:13.612766", "2026-08-21T20:30:13.612766"],
+            }
+        )
+
+    department_df = pd.DataFrame(
+            {"department_id": [1, 2],
+            "department_name": ["Sales", "Purchasing"],
+            "location": ["Manchester", "Leeds"],
+            "manager": ["Ian", "Fred"],
+            "created_at": ["2026-01-01", "2026-01-02"],
+            "last_updated": ["2026-01-03", "2026-01-04"],
+            "extracted_ts": ["2026-08-21T20:30:13.612766", "2026-08-21T20:30:13.612766"],
+            }
+        )
+
+    def mock_get_dataframe_from_s3(bucket, prefix):
+        if prefix == "staff":
+            return staff_df
+        if prefix == "department":
+            return department_df
+
+    monkeypatch.setattr(
+        "transform.transform_data.get_dataframe_from_s3",
+        mock_get_dataframe_from_s3
+    )
+    
+    
+    result = create_merged_staff_dataframe()
+    assert isinstance(result, pd.DataFrame)
+    assert len(result.columns) == 6
+    assert 'staff_id' in result.columns
+    assert 'first_name' in result.columns
+    assert 'last_name' in result.columns
+    assert 'department_name' in result.columns
+    assert 'location' in result.columns
+    assert 'email_address' in result.columns
+    assert 'department_id' not in result.columns
+    assert 'manager' not in result.columns
+    assert 'created_at' not in result.columns
+    assert 'last_updated' not in result.columns
+
+
 def test_transform_staff_returns_df():
     mock_df = pd.DataFrame(
                 {
@@ -158,6 +212,7 @@ def test_transform_staff_returns_df_with_no_duplicates():
     repeated_staff_ids = result[result["staff_id"].duplicated(keep=False)]
     assert len(repeated_staff_ids) == 0
 
+
 def test_transform_staff_removes_rows_with_null_values():
     mock_df = pd.DataFrame(
                     {
@@ -172,6 +227,7 @@ def test_transform_staff_removes_rows_with_null_values():
     
     result = transform_staff(mock_df)
     assert len(result) == 1
+
 
 def test_transform_location_returns_df():
     mock_df = pd.DataFrame(
@@ -200,6 +256,7 @@ def test_transform_location_returns_df():
     assert "country" in result.columns
     assert "phone" in result.columns
 
+
 def test_transform_location_returns_df_with_no_duplicates():
     mock_df = pd.DataFrame(
             {
@@ -220,6 +277,7 @@ def test_transform_location_returns_df_with_no_duplicates():
     assert len(repeated_rows) == 0
     assert len(result) == 1
 
+
 def test_transform_location_removes_rows_with_missing_values():
     mock_df = pd.DataFrame(
             {
@@ -239,6 +297,7 @@ def test_transform_location_removes_rows_with_missing_values():
     repeated_rows = result[result["location_id"].duplicated(keep=False)]
     assert len(repeated_rows) == 0
     assert len(result) == 1
+
 
 def test_transform_sales_returns_df():
     mock_df = pd.DataFrame(
@@ -298,6 +357,7 @@ def test_transform_sales_returns_df_with_no_duplicates():
     repeated_orders = result[result["sales_order_id"].duplicated(keep=False)]
     assert len(repeated_orders) == 0
     assert len(result) == 1
+
 
 def test_transform_sales_removes_rows_with_missing_values():
     mock_df = pd.DataFrame(
