@@ -63,3 +63,35 @@ resource "aws_cloudwatch_metric_alarm" "transform_function_error_alarm" {
   insufficient_data_actions = []
   alarm_actions             = [aws_sns_topic.error_notification.arn]
 }
+
+# cloudwatch log group for load lambda
+resource "aws_cloudwatch_log_group" "load_function_log_group" {
+  name              = "/aws/lambda/load_lambda" # change if the function name differs, finds the logging info in warehouse function
+  retention_in_days = 30                               # logs delete after 14 days
+}
+
+resource "aws_cloudwatch_log_metric_filter" "load_function_error" {
+  name           = "load_function_error"
+  pattern        = "ERROR"
+  log_group_name = aws_cloudwatch_log_group.load_function_log_group.name
+
+  metric_transformation {
+    name      = "load_function_error"
+    namespace = "Lambda errors"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "load_function_error_alarm" {
+  alarm_name                = "load_function_error_alarm"
+  comparison_operator       = "GreaterThanOrEqualToThreshold"
+  evaluation_periods        = 1
+  metric_name               = aws_cloudwatch_log_metric_filter.load_function_error.name
+  namespace                 = "Lambda errors"
+  period                    = 60
+  statistic                 = "Sum"
+  threshold                 = 1
+  alarm_description         = "Alert when load function logs contain Error"
+  insufficient_data_actions = []
+  alarm_actions             = [aws_sns_topic.error_notification.arn]
+}
