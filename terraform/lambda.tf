@@ -225,8 +225,14 @@ resource "aws_lambda_function" "load_lambda" {
   }
   #Ensures policy attachment takes place before network connection
   depends_on = [
-    aws_iam_role_policy_attachment.schema_load_lambda_vpc_attach
+    aws_iam_role_policy_attachment.schema_load_lambda_vpc_attach,
+    aws_cloudwatch_log_group.load_function_log_group
   ]
+
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.load_function_log_group.name
+  }
 }
 
 resource "aws_s3_object" "schema_load_function_zip" {
