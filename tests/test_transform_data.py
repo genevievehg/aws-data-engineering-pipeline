@@ -1,4 +1,7 @@
 from unittest.mock import MagicMock, patch
+import boto3
+from moto import mock_aws
+from io import BytesIO
 import pycountry
 import pytest
 import pandas as pd
@@ -13,6 +16,42 @@ from transform.transform_data import (
     lambda_handler
 )
 
+@mock_aws
+def test_get_dataframe_from_s3_returns_dataframe():
+    parquet_buffer = BytesIO()
+    mock_df = pd.DataFrame(
+            {
+                "currency_id": [1, 2],
+                "currency_code": ["GBP", "USD"],
+                "created_at": ["2026-01-01", "2026-01-02"],
+                "last_updated": ["2026-01-03", "2026-01-04"],
+            }
+        )
+    mock_df.to_parquet(parquet_buffer, index=False)
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client.create_bucket(Bucket="test_bucket")
+    s3_client.put_object(Bucket="test_bucket", Key="raw/currency/test.parquet", Body=parquet_buffer.getvalue())
+
+    result = get_dataframe_from_s3("test_bucket", "currency")
+    assert isinstance(result, pd.DataFrame)
+
+
+@mock_aws
+def test_get_dataframe_from_s3_handles_missing_file_errors():
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client.create_bucket(Bucket="test_bucket")
+    s3_client.put_object(Bucket="test_bucket", Key="raw/currency/test.txt", Body="test")
+    with pytest.raises(FileNotFoundError) as e:
+        get_dataframe_from_s3("test_bucket", "currency")
+    assert e.value.args[0] == "No parquet files found under s3://test_bucket/raw/currency/"
+
+
+@mock_aws
+def test_get_dataframe_from_s3_handles_access_errors():
+    with pytest.raises(RuntimeError) as e:
+        get_dataframe_from_s3("test_bucket", "currency")
+    assert e.value.args[0] == "Failed to read parquet data from s3://test_bucket/raw/currency/"
+     
 
 def test_get_currency_name_returns_currency_name():
     assert get_currency_name("GBP") == "Pound Sterling"
