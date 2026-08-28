@@ -4,7 +4,7 @@ import numpy as np
 from io import BytesIO
 import boto3
 import os
-from datetime import datetime, date
+from datetime import datetime
 
 
 def get_dataframe_from_s3(bucket: str, object_key: str) -> pd.DataFrame:
@@ -32,7 +32,7 @@ def get_dataframe_from_s3(bucket: str, object_key: str) -> pd.DataFrame:
             for obj in objects
             if obj["Key"].endswith(".parquet")
         ]
-
+        
         if not parquet_keys:
             raise FileNotFoundError(
                 f"No parquet files found under s3://{bucket}/{prefix}"
@@ -52,6 +52,8 @@ def get_dataframe_from_s3(bucket: str, object_key: str) -> pd.DataFrame:
 
         return pd.concat(dataframes, ignore_index=True)
 
+    except FileNotFoundError:
+        raise
     except Exception as error:
         raise RuntimeError(
             f"Failed to read parquet data from s3://{bucket}/{prefix}"
@@ -122,10 +124,10 @@ def create_merged_staff_dataframe():
     department_df = get_dataframe_from_s3(os.environ["INGEST_BUCKET"], 'department')
 
     # drop rows with duplicate staff ids and drop created_at and last_updated column from staff
-    staff_df = staff_df.drop_duplicates(subset="staff_id", keep="last").drop(columns=['created_at', 'last_updated'])
+    staff_df = staff_df.drop_duplicates(subset="staff_id", keep="last").drop(columns=['created_at', 'last_updated', 'extracted_ts'])
         
     # drop rows with duplicate department ids and drop created_at and last_updated column from department
-    department_df = department_df.drop_duplicates(subset="department_id", keep="last").drop(columns=['manager', 'created_at', 'last_updated'])
+    department_df = department_df.drop_duplicates(subset="department_id", keep="last").drop(columns=['manager', 'created_at', 'last_updated', 'extracted_ts'])
 
     # merge staff and department dfs and drop department_id column
     combined_df = pd.merge(staff_df, department_df, how="left", on=["department_id", "department_id"]).drop(columns=['department_id'])
