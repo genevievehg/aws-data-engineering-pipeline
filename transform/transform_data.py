@@ -4,7 +4,7 @@ import numpy as np
 from io import BytesIO
 import boto3
 import os
-from datetime import datetime, date
+from datetime import datetime
 
 
 def get_dataframe_from_s3(bucket: str, object_key: str) -> pd.DataFrame:
@@ -32,7 +32,7 @@ def get_dataframe_from_s3(bucket: str, object_key: str) -> pd.DataFrame:
             for obj in objects
             if obj["Key"].endswith(".parquet")
         ]
-
+        
         if not parquet_keys:
             raise FileNotFoundError(
                 f"No parquet files found under s3://{bucket}/{prefix}"
@@ -52,6 +52,8 @@ def get_dataframe_from_s3(bucket: str, object_key: str) -> pd.DataFrame:
 
         return pd.concat(dataframes, ignore_index=True)
 
+    except FileNotFoundError:
+        raise
     except Exception as error:
         raise RuntimeError(
             f"Failed to read parquet data from s3://{bucket}/{prefix}"
