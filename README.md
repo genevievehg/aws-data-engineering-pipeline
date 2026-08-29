@@ -88,6 +88,7 @@ The transformed data is remodelled into a star schema.
 ├── lambda_layers/         # Lambda dependency definitions and build script
 ├── load/                  # Warehouse loading utilities
 ├── schema/                # Warehouse schema creation
+├── scripts/               # Local scripts for accessing and inspecting AWS resources
 ├── terraform/             # Main AWS infrastructure
 ├── terraform-bootstrap/   # Remote Terraform state infrastructure
 ├── tests/                 # Unit tests
